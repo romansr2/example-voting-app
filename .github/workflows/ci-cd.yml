@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # Оновлено до актуальної версії
+        uses: actions/checkout@v4
 
       - name: Azure Login
         uses: azure/login@v1
@@ -34,13 +34,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Copy docker-compose to VM
-        uses: appleboy/scp-action@v0.1.7 # Оновлено версію
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VM_IP }}
           username: azureuser
           key: ${{ secrets.VM_SSH_KEY }}
           source: "docker-compose.yml"
-          target: "/home/azureuser/" # Краще вказувати повний шлях
+          target: "/home/azureuser/"
 
       - name: Deploy on VM
         uses: appleboy/ssh-action@v0.1.10
@@ -50,20 +50,22 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             cd /home/azureuser/
-            
-            # 1. Покращений sed: '.*' дозволяє знайти рядок незалежно від того, 
-            # чи там написано './vote', 'vote/' чи є зайві пробіли.
+
+            # Використовуємо максимально гнучкий пошук (регулярні вирази)
+            # Це замінить будь-який рядок, що починається з build: і містить назву сервісу
             sed -i 's|build:.*vote|image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest|g' docker-compose.yml
             sed -i 's|build:.*result|image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest|g' docker-compose.yml
             sed -i 's|build:.*worker|image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest|g' docker-compose.yml
             
-            # 2. Видаляємо блок context, якщо він є (Docker може лаятися на нього без сирців)
+            # ВИДАЛЯЄМО контекст (context: .), щоб Docker не шукав папки, яких немає
             sed -i '/context:/d' docker-compose.yml
-            
-            # 3. Перевірка результату в логах (якщо знову впаде - побачимо файл)
+
+            # ВИВОДИМО файл у консоль, щоб ми бачили, чи спрацював sed
+            echo "--- ПЕРЕВІРКА ФАЙЛУ ---"
             cat docker-compose.yml
-            
-            # 4. Авторизація та перезапуск
+            echo "-----------------------"
+
+            # Авторизація та запуск
             az acr login --name ${{ secrets.ACR_NAME }}
             docker compose pull
             docker compose up -d --remove-orphans
