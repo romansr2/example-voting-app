@@ -48,26 +48,23 @@ jobs:
           host: ${{ secrets.VM_IP }}
           username: azureuser
           key: ${{ secrets.VM_SSH_KEY }}
-          script: |
+         script: |
             cd /home/azureuser/
             
-            # 1. Робимо бекап файлу (про всяк випадок)
-            cp docker-compose.yml docker-compose.yml.bak
-            
-            # 2. Універсальна заміна build на image для всіх сервісів
+            # 1. Універсальна заміна: шукає 'build:', потім будь-які символи, потім назву сервісу
             sed -i 's|build:.*vote|image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest|g' docker-compose.yml
             sed -i 's|build:.*result|image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest|g' docker-compose.yml
             sed -i 's|build:.*worker|image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest|g' docker-compose.yml
             
-            # 3. Видаляємо параметри context, щоб Docker не шукав папки з кодом
+            # 2. Видаляємо блок 'context', щоб Docker навіть не намагався шукати папки
             sed -i '/context:/d' docker-compose.yml
             
-            # 4. Вивід файлу в лог для перевірки (ти побачиш це в GitHub Actions)
-            echo "--- ОНОВЛЕНИЙ DOCKER-COMPOSE ---"
+            # 3. ПЕРЕВІРКА: виводимо файл у лог GitHub, щоб ми на власні очі побачили зміни
+            echo "--- ВМІСТ ФАЙЛУ ПІСЛЯ ВИПРАВЛЕННЯ ---"
             cat docker-compose.yml
-            echo "--------------------------------"
+            echo "------------------------------------"
             
-            # 5. Авторизація, стягування образів та запуск
+            # 4. Авторизація та запуск
             az acr login --name ${{ secrets.ACR_NAME }}
             sudo docker compose pull
             sudo docker compose up -d --remove-orphans
