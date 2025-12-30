@@ -68,3 +68,7 @@ jobs:
             az acr login --name ${{ secrets.ACR_NAME }}
             sudo docker compose pull
             sudo docker compose up -d --remove-orphans
+
+
+                        # 4. Авторизація та запуск
+
