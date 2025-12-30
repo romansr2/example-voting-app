@@ -41,7 +41,6 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           source: "docker-compose.yml"
           target: "/home/azureuser/"
-
       - name: Deploy on VM
         uses: appleboy/ssh-action@v0.1.10
         with:
