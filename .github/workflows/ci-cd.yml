@@ -51,15 +51,24 @@ jobs:
           script: |
             cd /home/azureuser/
             
-            # Оновлюємо образи у файлі (використовуємо твій виправлений sed)
-            sed -i 's|build:.*vote|image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest|g' docker-compose.yml
-            sed -i 's|build:.*result|image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest|g' docker-compose.yml
-            sed -i 's|build:.*worker|image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest|g' docker-compose.yml
-            
-            # Видаляємо блок context, щоб не було помилок
+            # 1. Повністю видаляємо старі секції build та context, щоб не було конфліктів
+            sed -i '/build:/d' docker-compose.yml
             sed -i '/context:/d' docker-compose.yml
             
-            # Авторизація та перезапуск
+            # 2. Додаємо посилання на image відразу після назви кожного сервісу
+            # Важливо: використовуємо 4 пробіли перед image для правильного YAML
+            sed -i '/vote:/a \    image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest' docker-compose.yml
+            sed -i '/result:/a \    image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest' docker-compose.yml
+            sed -i '/worker:/a \    image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest' docker-compose.yml
+            
+            # 3. Виводимо результат у лог, щоб ми могли перевірити структуру файлу
+            echo "--- ВМІСТ ФАЙЛУ ПІСЛЯ ПРАВОК ---"
+            cat docker-compose.yml
+            echo "--------------------------------"
+            
+            # 4. Авторизація в Azure Registry
             az acr login --name ${{ secrets.ACR_NAME }}
+            
+            # 5. Стягування нових образів та запуск контейнерів
             sudo docker compose pull
             sudo docker compose up -d --remove-orphans
