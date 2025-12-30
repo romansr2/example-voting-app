@@ -41,33 +41,25 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           source: "docker-compose.yml"
           target: "/home/azureuser/"
+
       - name: Deploy on VM
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.VM_IP }}
           username: azureuser
           key: ${{ secrets.VM_SSH_KEY }}
-         script: |
+          script: |
             cd /home/azureuser/
             
-            # 1. Універсальна заміна: шукає 'build:', потім будь-які символи, потім назву сервісу
+            # Оновлюємо образи у файлі (використовуємо твій виправлений sed)
             sed -i 's|build:.*vote|image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest|g' docker-compose.yml
             sed -i 's|build:.*result|image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest|g' docker-compose.yml
             sed -i 's|build:.*worker|image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest|g' docker-compose.yml
             
-            # 2. Видаляємо блок 'context', щоб Docker навіть не намагався шукати папки
+            # Видаляємо блок context, щоб не було помилок
             sed -i '/context:/d' docker-compose.yml
             
-            # 3. ПЕРЕВІРКА: виводимо файл у лог GitHub, щоб ми на власні очі побачили зміни
-            echo "--- ВМІСТ ФАЙЛУ ПІСЛЯ ВИПРАВЛЕННЯ ---"
-            cat docker-compose.yml
-            echo "------------------------------------"
-            
-            # 4. Авторизація та запуск
+            # Авторизація та перезапуск
             az acr login --name ${{ secrets.ACR_NAME }}
             sudo docker compose pull
             sudo docker compose up -d --remove-orphans
-
-
-                        # 4. Авторизація та запуск
-
