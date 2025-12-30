@@ -1,48 +1,4 @@
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ "main" ]
-
-jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: ACR Login
-        run: az acr login --name ${{ secrets.ACR_NAME }}
-
-      - name: Build and Push Images
-        run: |
-          for service in vote result worker; do
-            docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/$service:latest ./$service
-            docker push ${{ secrets.ACR_LOGIN_SERVER }}/$service:latest
-          done
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Copy docker-compose to VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VM_IP }}
-          username: azureuser
-          key: ${{ secrets.VM_SSH_KEY }}
-          source: "docker-compose.yml"
-          target: "/home/azureuser/"
-
-      - name: Deploy on VM
+- name: Deploy on VM
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.VM_IP }}
@@ -50,22 +6,19 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             cd /home/azureuser/
-
-            # Використовуємо максимально гнучкий пошук (регулярні вирази)
-            # Це замінить будь-який рядок, що починається з build: і містить назву сервісу
+            
+            # 1. Замінюємо build на image (використовуємо '.*' для надійності)
             sed -i 's|build:.*vote|image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest|g' docker-compose.yml
             sed -i 's|build:.*result|image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest|g' docker-compose.yml
             sed -i 's|build:.*worker|image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest|g' docker-compose.yml
             
-            # ВИДАЛЯЄМО контекст (context: .), щоб Docker не шукав папки, яких немає
+            # 2. Видаляємо контекст, щоб Docker не шукав папки
             sed -i '/context:/d' docker-compose.yml
-
-            # ВИВОДИМО файл у консоль, щоб ми бачили, чи спрацював sed
-            echo "--- ПЕРЕВІРКА ФАЙЛУ ---"
+            
+            # 3. Перевіряємо, чи файл змінився (це з'явиться в логах GitHub)
             cat docker-compose.yml
-            echo "-----------------------"
-
-            # Авторизація та запуск
+            
+            # 4. Логін в ACR та запуск
             az acr login --name ${{ secrets.ACR_NAME }}
             docker compose pull
             docker compose up -d --remove-orphans
