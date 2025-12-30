@@ -33,15 +33,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy docker-compose to VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VM_IP }}
-          username: azureuser
-          key: ${{ secrets.VM_SSH_KEY }}
-          source: "docker-compose.yml"
-          target: "/home/azureuser/"
-
       - name: Deploy on VM
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -51,30 +42,76 @@ jobs:
           script: |
             cd /home/azureuser/
             
-            # 1. ВИДАЛЯЄМО ВСЕ ЗАЙВЕ (build, context, target, і будь-які локальні шляхи з ./)
-            # Ми видаляємо будь-який рядок, де є './', незалежно від лапок
-            sed -i '/build:/d; /context:/d; /target:/d; /\.\//d' docker-compose.yml
-            
-            # 2. Очищаємо застарілі блоки volumes та healthcheck, які посилаються на відсутні файли
-            sed -i '/volumes:/d' docker-compose.yml
-            sed -i '/healthcheck:/,/start_period:/d' docker-compose.yml
+            # Створюємо чистий файл docker-compose.yml безпосередньо на сервері
+            cat <<EOF > docker-compose.yml
+            version: "3.9"
+            services:
+              vote:
+                image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest
+                ports:
+                  - "8080:80"
+                networks:
+                  - front-tier
+                  - back-tier
+                depends_on:
+                  redis:
+                    condition: service_healthy
 
-            # 3. ВСТАВЛЯЄМО ОБРАЗИ ( image: )
-            # Використовуємо ^ для точного пошуку назви сервісу на початку рядка
-            sed -i 's/^  vote:/  vote:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/vote:latest/' docker-compose.yml
-            sed -i 's/^  result:/  result:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/result:latest/' docker-compose.yml
-            sed -i 's/^  worker:/  worker:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/worker:latest/' docker-compose.yml
+              result:
+                image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest
+                ports:
+                  - "8081:80"
+                networks:
+                  - front-tier
+                  - back-tier
+                depends_on:
+                  db:
+                    condition: service_healthy
 
-            # 4. ВІДНОВЛЮЄМО volumes тільки для бази даних (для збереження даних)
-            # Шукаємо рядок з db-data і додаємо над ним заголовок volumes:
-            sed -i '/"db-data:/i \    volumes:' docker-compose.yml
+              worker:
+                image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest
+                networks:
+                  - back-tier
+                depends_on:
+                  redis:
+                    condition: service_healthy
+                  db:
+                    condition: service_healthy
 
-            # 5. ДІАГНОСТИКА: дивимось, що вийшло
-            echo "--- ФІНАЛЬНА ПЕРЕВІРКА ФАЙЛУ ---"
-            cat docker-compose.yml
-            echo "--------------------------------"
-            
-            # 6. АВТОРИЗАЦІЯ ТА ЗАПУСК
+              redis:
+                image: redis:alpine
+                networks:
+                  - back-tier
+                healthcheck:
+                  test: ["CMD", "redis-cli", "ping"]
+                  interval: 5s
+                  timeout: 5s
+                  retries: 5
+
+              db:
+                image: postgres:15-alpine
+                environment:
+                  POSTGRES_USER: postgres
+                  POSTGRES_PASSWORD: postgres
+                volumes:
+                  - db-data:/var/lib/postgresql/data
+                networks:
+                  - back-tier
+                healthcheck:
+                  test: ["CMD-SHELL", "pg_isready -U postgres"]
+                  interval: 5s
+                  timeout: 5s
+                  retries: 5
+
+            networks:
+              front-tier:
+              back-tier:
+
+            volumes:
+              db-data:
+            EOF
+
+            # Авторизація та запуск
             az acr login --name ${{ secrets.ACR_NAME }}
             sudo docker compose pull
             sudo docker compose up -d --remove-orphans
