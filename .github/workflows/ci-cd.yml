@@ -51,25 +51,30 @@ jobs:
           script: |
             cd /home/azureuser/
             
-            # 1. Глибока чистка: видаляємо все, що заважає (build, context, target, volumes)
-            # Ми видаляємо '  volumes:', бо на сервері немає папок з кодом.
-            sed -i '/build:/d; /context:/d; /target:/d; /  volumes:/d; /- \.\//d' docker-compose.yml
+            # 1. ВИДАЛЯЄМО ВСЕ ЗАЙВЕ (build, context, target, і будь-які локальні шляхи з ./)
+            # Ми видаляємо будь-який рядок, де є './', незалежно від лапок
+            sed -i '/build:/d; /context:/d; /target:/d; /\.\//d' docker-compose.yml
             
-            # 2. Повертаємо volumes ТІЛЬКИ для бази даних (db), бо там використовуються named volumes
-            # Це потрібно для збереження даних бази даних
-            sed -i '/- "db-data:/i \    volumes:' docker-compose.yml
+            # 2. Очищаємо застарілі блоки volumes та healthcheck, які посилаються на відсутні файли
+            sed -i '/volumes:/d' docker-compose.yml
+            sed -i '/healthcheck:/,/start_period:/d' docker-compose.yml
 
-            # 3. Точкова вставка образів ТІЛЬКИ в основні секції сервісів
+            # 3. ВСТАВЛЯЄМО ОБРАЗИ ( image: )
+            # Використовуємо ^ для точного пошуку назви сервісу на початку рядка
             sed -i 's/^  vote:/  vote:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/vote:latest/' docker-compose.yml
             sed -i 's/^  result:/  result:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/result:latest/' docker-compose.yml
             sed -i 's/^  worker:/  worker:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/worker:latest/' docker-compose.yml
 
-            # 4. Вивід фінального файлу для перевірки в логах
-            echo "--- ФІНАЛЬНИЙ ФАЙЛ ПІСЛЯ ВСІХ ПРАВОК ---"
+            # 4. ВІДНОВЛЮЄМО volumes тільки для бази даних (для збереження даних)
+            # Шукаємо рядок з db-data і додаємо над ним заголовок volumes:
+            sed -i '/"db-data:/i \    volumes:' docker-compose.yml
+
+            # 5. ДІАГНОСТИКА: дивимось, що вийшло
+            echo "--- ФІНАЛЬНА ПЕРЕВІРКА ФАЙЛУ ---"
             cat docker-compose.yml
-            echo "---------------------------------------"
+            echo "--------------------------------"
             
-            # 5. Авторизація та запуск
+            # 6. АВТОРИЗАЦІЯ ТА ЗАПУСК
             az acr login --name ${{ secrets.ACR_NAME }}
             sudo docker compose pull
             sudo docker compose up -d --remove-orphans
