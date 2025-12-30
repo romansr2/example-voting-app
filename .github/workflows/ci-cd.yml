@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Оновлено до актуальної версії
 
       - name: Azure Login
         uses: azure/login@v1
@@ -31,16 +31,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Copy docker-compose to VM
-        uses: appleboy/scp-action@v0.1.4
+        uses: appleboy/scp-action@v0.1.7 # Оновлено версію
         with:
           host: ${{ secrets.VM_IP }}
           username: azureuser
           key: ${{ secrets.VM_SSH_KEY }}
           source: "docker-compose.yml"
-          target: "~/"
+          target: "/home/azureuser/" # Краще вказувати повний шлях
 
       - name: Deploy on VM
         uses: appleboy/ssh-action@v0.1.10
@@ -49,12 +49,21 @@ jobs:
           username: azureuser
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            # Підготовка файлу docker-compose на самій машині
-            sed -i 's|build: ./vote|image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest|' docker-compose.yml
-            sed -i 's|build: ./result|image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest|' docker-compose.yml
-            sed -i 's|build: ./worker|image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest|' docker-compose.yml
+            cd /home/azureuser/
             
-            # Авторизація та запуск сервісів
+            # 1. Покращений sed: '.*' дозволяє знайти рядок незалежно від того, 
+            # чи там написано './vote', 'vote/' чи є зайві пробіли.
+            sed -i 's|build:.*vote|image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest|g' docker-compose.yml
+            sed -i 's|build:.*result|image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest|g' docker-compose.yml
+            sed -i 's|build:.*worker|image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest|g' docker-compose.yml
+            
+            # 2. Видаляємо блок context, якщо він є (Docker може лаятися на нього без сирців)
+            sed -i '/context:/d' docker-compose.yml
+            
+            # 3. Перевірка результату в логах (якщо знову впаде - побачимо файл)
+            cat docker-compose.yml
+            
+            # 4. Авторизація та перезапуск
             az acr login --name ${{ secrets.ACR_NAME }}
             docker compose pull
             docker compose up -d --remove-orphans
