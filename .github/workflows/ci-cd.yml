@@ -51,24 +51,28 @@ jobs:
           script: |
             cd /home/azureuser/
             
-            # 1. Повністю видаляємо старі секції build та context, щоб не було конфліктів
-            sed -i '/build:/d' docker-compose.yml
-            sed -i '/context:/d' docker-compose.yml
+            # 1. Глибоке очищення: видаляємо все, що стосується збірки та старих образів
+            # Це прибере 'build:', 'context:', 'target:' та попередні спроби вставити 'image:'
+            sed -i '/build:/d; /context:/d; /target:/d' docker-compose.yml
+            sed -i '/image: .*\/vote:latest/d' docker-compose.yml
+            sed -i '/image: .*\/result:latest/d' docker-compose.yml
+            sed -i '/image: .*\/worker:latest/d' docker-compose.yml
             
-            # 2. Додаємо посилання на image відразу після назви кожного сервісу
-            # Важливо: використовуємо 4 пробіли перед image для правильного YAML
-            sed -i '/vote:/a \    image: ${{ secrets.ACR_LOGIN_SERVER }}/vote:latest' docker-compose.yml
-            sed -i '/result:/a \    image: ${{ secrets.ACR_LOGIN_SERVER }}/result:latest' docker-compose.yml
-            sed -i '/worker:/a \    image: ${{ secrets.ACR_LOGIN_SERVER }}/worker:latest' docker-compose.yml
-            
-            # 3. Виводимо результат у лог, щоб ми могли перевірити структуру файлу
-            echo "--- ВМІСТ ФАЙЛУ ПІСЛЯ ПРАВОК ---"
+            # 2. Видаляємо локальні volumes (рядки типу - ./vote:...), бо коду на VM немає
+            sed -i '/- \.\//d' docker-compose.yml
+
+            # 3. Точкова вставка образів ТІЛЬКИ в описи сервісів
+            # Використовуємо символ ^ для пошуку початку рядка, щоб не зачепити depends_on
+            sed -i 's/^  vote:/  vote:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/vote:latest/' docker-compose.yml
+            sed -i 's/^  result:/  result:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/result:latest/' docker-compose.yml
+            sed -i 's/^  worker:/  worker:\n    image: ${{ secrets.ACR_LOGIN_SERVER }}\/worker:latest/' docker-compose.yml
+
+            # 4. Вивід фінального файлу для перевірки в логах GitHub
+            echo "--- ВМІСТ ФАЙЛУ ПІСЛЯ ВИПРАВЛЕННЯ ---"
             cat docker-compose.yml
-            echo "--------------------------------"
+            echo "------------------------------------"
             
-            # 4. Авторизація в Azure Registry
+            # 5. Авторизація та запуск
             az acr login --name ${{ secrets.ACR_NAME }}
-            
-            # 5. Стягування нових образів та запуск контейнерів
             sudo docker compose pull
             sudo docker compose up -d --remove-orphans
