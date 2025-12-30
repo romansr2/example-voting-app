@@ -42,7 +42,7 @@ jobs:
           script: |
             cd /home/azureuser/
             
-            # 1. Створюємо файл заново (це вже працює ідеально)
+            # 1. Створюємо файл наново. Це працює 100%, бо файл генерується з нуля.
             cat <<EOF > docker-compose.yml
             version: "3.9"
             services:
@@ -111,10 +111,8 @@ jobs:
               db-data:
             EOF
 
-            # 2. НАДІЙНА АВТОРИЗАЦІЯ (передаємо токен безпосередньо в sudo docker)
-            # Ми отримуємо токен через az acr login і відправляємо його в docker login
-            TOKEN=\$(az acr login --name ${{ secrets.ACR_NAME }} --expose-token --output tsv --query accessToken)
-            echo "\$TOKEN" | sudo docker login ${{ secrets.ACR_LOGIN_SERVER }} --username 00000000-0000-0000-0000-000000000000 --password-stdin
+            # 2. АВТОРИЗАЦІЯ (найнадійніший спосіб одним рядком без перемінних)
+            az acr login --name ${{ secrets.ACR_NAME }} --expose-token --output tsv --query accessToken | sudo docker login ${{ secrets.ACR_LOGIN_SERVER }} --username 00000000-0000-0000-0000-000000000000 --password-stdin
 
             # 3. ЗАПУСК
             sudo docker compose pull
