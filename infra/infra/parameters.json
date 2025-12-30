@@ -1,0 +1,42 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualMachines_vm_Skira_name": {
+            "value": null
+        },
+        "vaults_rsv_Skira_name": {
+            "value": null
+        },
+        "sshPublicKeys_vm_Skira_key_name": {
+            "value": null
+        },
+        "virtualNetworks_vnet_Skira_name": {
+            "value": null
+        },
+        "publicIPAddresses_vm_Skira_ip_name": {
+            "value": null
+        },
+        "registries_acrskira777_name": {
+            "value": null
+        },
+        "networkInterfaces_vm_skira105_z1_name": {
+            "value": null
+        },
+        "workspaces_law_Skira_name": {
+            "value": null
+        },
+        "networkSecurityGroups_vm_Skira_nsg_name": {
+            "value": null
+        },
+        "dataCollectionRules_MSVMI_norwayeast_vm_skira_name": {
+            "value": null
+        },
+        "dataCollectionRules_MSVMOtel_norwayeast_vm_skira_name": {
+            "value": null
+        },
+        "accounts_defaultazuremonitorworkspace_noe_externalid": {
+            "value": null
+        }
+    }
+}
